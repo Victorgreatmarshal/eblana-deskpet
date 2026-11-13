@@ -1,0 +1,19 @@
+# 运行时数据：含 API Key、聊天记录、待办，切勿提交
+data/*
+!data/eblana_archive.txt
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 打包产物
+build/
+dist/
+Output/
+*.dmg
+
+# 系统文件
+.DS_Store
+Thumbs.db

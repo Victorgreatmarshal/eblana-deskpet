@@ -1,0 +1,96 @@
+# 推送 v 开头的标签（如 v1.0.0）时，自动打包 Windows 与 macOS 版本并发布到 Releases；
+# 也可以在 Actions 页面手动运行，只生成构建产物、不发布。
+name: Build & Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: 打包程序
+        run: pyinstaller --noconfirm --clean EblanaDeskPet.spec
+
+      - name: 免安装版压缩包
+        shell: pwsh
+        run: Compress-Archive -Path dist/EblanaDeskPet -DestinationPath EblanaDeskPet-windows-portable.zip
+
+      - name: 安装 Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: 生成安装包
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME.TrimStart("v") } else { "0.0.0" }
+          $iscc = Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" | Select-Object -First 1
+          & $iscc.FullName "/DMyAppVersion=$version" installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Move-Item Output/EblanaDeskPet_Setup.exe EblanaDeskPet-windows-setup.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            EblanaDeskPet-windows-setup.exe
+            EblanaDeskPet-windows-portable.zip
+
+  macos:
+    runs-on: macos-latest   # Apple 芯片（arm64）
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: 打包 .app
+        run: pyinstaller --noconfirm --clean EblanaDeskPet.spec
+
+      - name: 生成 dmg
+        run: |
+          mkdir -p dmg
+          cp -R dist/EblanaDeskPet.app dmg/
+          ln -s /Applications dmg/Applications
+          hdiutil create -volname "死芒桌宠" -srcfolder dmg -ov -format UDZO EblanaDeskPet-mac-arm64.dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: EblanaDeskPet-mac-arm64.dmg
+
+  release:
+    needs: [windows, macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

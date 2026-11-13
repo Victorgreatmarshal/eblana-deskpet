@@ -1,0 +1,7 @@
+# Windows 脚本必须是 CRLF，否则 cmd 的 goto 可能找不到标签
+*.bat text eol=crlf
+*.iss text eol=crlf
+*.isl text eol=crlf
+*.sh text eol=lf
+*.command text eol=lf
+*.py text eol=lf
